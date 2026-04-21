@@ -9,7 +9,7 @@ export function ColorPalette() {
       {MS_PAINT_PALETTE.map((c, i) => (
         <Text key={i} color={`rgb(${c.r},${c.g},${c.b})`}>█</Text>
       ))}
-      <Text> </Text>
+      <Text key="spacer"> </Text>
       {recentColors.map((c, i) => (
         <Text key={`r${i}`} color={`rgb(${c.r},${c.g},${c.b})`}>█</Text>
       ))}
