@@ -34,8 +34,10 @@ export class CanvasRenderer {
           // Move cursor to position
           output += `\x1b[${this.offsetY + row + 1};${this.offsetX + col + 1}H`;
           if (isCursor && cursorVisible) {
-            // Invert colors for cursor + use a different character for visibility
-            output += `\x1b[7;38;2;${pixel.r};${pixel.g};${pixel.b}m\u2592\x1b[0m`;
+            // Rainbow cursor — cycle hue, render as ▒ with bright FG over pixel BG
+            const hue = (Date.now() / 4) % 360;
+            const rgb = hslToRgb(hue, 100, 60);
+            output += `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]};48;2;${pixel.r};${pixel.g};${pixel.b}m\u2592\x1b[0m`;
           } else {
             output += `\x1b[38;2;${pixel.r};${pixel.g};${pixel.b}m\u2588\x1b[0m`;
           }
@@ -65,4 +67,21 @@ export class CanvasRenderer {
     this.height = height;
     this.invalidate();
   }
+}
+
+/** Convert HSL (h: 0-360, s: 0-100, l: 0-100) to [r, g, b] (0-255) */
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  s /= 100;
+  l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }

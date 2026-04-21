@@ -13,13 +13,13 @@ export function Canvas() {
   const cursorRow = useStore((s) => s.cursorRow);
   const rendererRef = useRef<CanvasRenderer | null>(null);
   const gridRef = useRef<import("../core/image-buffer.js").RGB[][] | null>(null);
-  const [cursorVisible, setCursorVisible] = useState(true);
+  const [cursorTick, setCursorTick] = useState(0);
 
-  // Blink timer — toggle cursor visibility every 500ms
+  // Rainbow cursor tick — re-render at ~12fps so the hue cycles smoothly
   useEffect(() => {
     const interval = setInterval(() => {
-      setCursorVisible((v) => !v);
-    }, 500);
+      setCursorTick((t) => t + 1);
+    }, 80);
     return () => clearInterval(interval);
   }, []);
 
@@ -39,8 +39,8 @@ export function Canvas() {
 
     const grid = Sampler.sample(image, viewport, editLayer);
     gridRef.current = grid;
-    rendererRef.current.render(grid, cursorCol, cursorRow, cursorVisible);
-  }, [image, editLayer, viewport, cursorCol, cursorRow, cursorVisible]);
+    rendererRef.current.render(grid, cursorCol, cursorRow, true);
+  }, [image, editLayer, viewport, cursorCol, cursorRow, cursorTick]);
 
   if (!image) {
     return (
