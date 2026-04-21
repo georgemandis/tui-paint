@@ -1,9 +1,12 @@
 #!/usr/bin/env bun
+import { resolve } from "path";
 import { render } from "ink";
 import { App } from "./App.js";
 
 const args = process.argv.slice(2);
-const source = args[0] || null;
+const raw = args[0] || null;
+const isUrl = raw?.startsWith("http://") || raw?.startsWith("https://");
+const source = raw && !isUrl ? resolve(process.env.PATUI_CWD || process.cwd(), raw) : raw;
 
 // Enter alt screen for fullscreen TUI
 process.stdout.write("\x1b[?1049h");

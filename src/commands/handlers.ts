@@ -1,9 +1,15 @@
+import { resolve } from "path";
 import { parseCommand } from "./parser.js";
 import { useStore, MS_PAINT_PALETTE } from "../state/store.js";
 import { ImageBuffer } from "../core/image-buffer.js";
 import { EditLayer } from "../core/edit-layer.js";
 import { Viewport } from "../core/viewport.js";
 import { undoStack } from "../state/undo.js";
+
+/** Resolve a file path relative to the user's original cwd (for Homebrew installs that cd to libexec) */
+export function resolvePath(p: string): string {
+  return resolve(process.env.PATUI_CWD || process.cwd(), p);
+}
 
 export { parseCommand };
 
@@ -31,7 +37,7 @@ export async function executeCommand(input: string) {
         const isUrl = source.startsWith("http://") || source.startsWith("https://");
         const image = isUrl
           ? await ImageBuffer.fromUrl(source)
-          : await ImageBuffer.fromFile(source);
+          : await ImageBuffer.fromFile(resolvePath(source));
         const cols = (process.stdout.columns || 80) - 5;
         const rows = (process.stdout.rows || 24) - 4;
         const viewport = new Viewport(image.width, image.height, cols, rows);
@@ -72,19 +78,19 @@ export async function executeCommand(input: string) {
         return;
       }
       try {
-        // Dynamic imports to avoid circular dependencies — export modules don't exist yet (Task 10)
+        const outPath = resolvePath(filename);
         if (filename.endsWith(".png") || filename.endsWith(".jpg")) {
           const { exportImage } = await import("../export/image.js");
-          await exportImage(filename);
+          await exportImage(outPath);
         } else if (filename.endsWith(".ans")) {
           const { exportAnsi } = await import("../export/ansi.js");
-          await exportAnsi(filename, true);
+          await exportAnsi(outPath, true);
         } else if (filename.endsWith(".txt")) {
           const { exportAnsi } = await import("../export/ansi.js");
-          await exportAnsi(filename, false);
+          await exportAnsi(outPath, false);
         } else {
           const { exportImage } = await import("../export/image.js");
-          await exportImage(filename + ".png");
+          await exportImage(outPath + ".png");
         }
         store.setMessage(`Saved: ${filename}`);
       } catch (e: any) {
@@ -108,7 +114,7 @@ export async function executeCommand(input: string) {
       const filename = args[0] || "output.png";
       try {
         const { exportImage } = await import("../export/image.js");
-        await exportImage(filename);
+        await exportImage(resolvePath(filename));
       } catch {}
       process.exit(0);
       break;
