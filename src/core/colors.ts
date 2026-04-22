@@ -195,7 +195,7 @@ function rgbToHsl(color: RGB): { h: number; s: number; l: number } {
  *   1. white  (L > 95%)
  *   2. black  (L < 8%)
  *   3. gray   (S < 10%)
- *   4. brown  (hue 16-65, L < 40%, S 15-60%)
+ *   4. brown  (hue 16-65, L < 40%, S >= 15%)
  *   5. hue angle table
  */
 export function getHueFamily(color: RGB): string {
@@ -208,7 +208,7 @@ export function getHueFamily(color: RGB): string {
 
   // Hue angle table
   // High-lightness red-range hues look pink rather than red
-  if ((h >= 0 && h <= 15) || (h >= 346 && h <= 359)) {
+  if ((h >= 0 && h <= 15) || (h >= 346)) {
     return l > 70 ? "pink" : "red";
   }
   if (h >= 16 && h <= 45) return "orange";

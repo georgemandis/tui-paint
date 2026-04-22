@@ -36,6 +36,11 @@ describe("getHueFamily", () => {
     expect(getHueFamily({ r: 255, g: 0, b: 0 })).toBe("red");
   });
 
+  it("classifies near-red with fractional hue (h ≈ 359.8)", () => {
+    // {255, 0, 1} produces hue ~359.8, must still be classified as red
+    expect(getHueFamily({ r: 255, g: 0, b: 1 })).toBe("red");
+  });
+
   it("classifies pure blue", () => {
     expect(getHueFamily({ r: 0, g: 0, b: 255 })).toBe("blue");
   });
