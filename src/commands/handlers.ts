@@ -16,7 +16,7 @@ export { parseCommand };
 
 function executeSubstitution(input: string, store: ReturnType<typeof useStore.getState>) {
   // Parse: %s/from/to/g
-  const match = input.match(/^%s\/(.+?)\/(.+?)\/g$/);
+  const match = input.match(/^%s\/([^/]+)\/([^/]+)\/g$/);
   if (!match) {
     store.setMessage("Usage: :%s/color/color/g (add ~ prefix for fuzzy: :%s/~blue/red/g)");
     return;

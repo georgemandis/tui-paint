@@ -94,9 +94,9 @@ const HELP_LINES = `
   :q / :q!               Quit
   :set zoom N            Set zoom level
   :set brush N           Set brush size
-  :set fg N              Set foreground to palette color 1-16
-  :set bg N              Set background to palette color 1-16
-  :color N               Select foreground palette color 1-16
+  :set fg <name-or-N>    Set foreground (CSS name or palette 1-16)
+  :set bg <name-or-N>    Set background (CSS name or palette 1-16)
+  :color <name-or-N>     Select foreground color (CSS name or 1-16)
   :goto X Y / :g X Y    Jump to source pixel coordinate
   :gray                  Toggle grayscale filter
   :palette <name>        Limit colors (cga, gameboy, websafe)

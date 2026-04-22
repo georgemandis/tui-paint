@@ -185,7 +185,7 @@ function rgbToHsl(color: RGB): { h: number; s: number; l: number } {
     if (h < 0) h += 360;
   }
 
-  return { h, s: s * 100, l: l * 100 };
+  return { h, s: Math.min(s, 1) * 100, l: l * 100 };
 }
 
 /**

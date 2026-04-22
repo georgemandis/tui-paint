@@ -36,12 +36,12 @@ const newIdx = args.indexOf("--new");
 if (newIdx !== -1) {
   const dims = args[newIdx + 1];
   const match = dims?.match(/^(\d+)x(\d+)$/);
-  if (!match) {
+  if (!match || parseInt(match[1]) < 1 || parseInt(match[2]) < 1) {
     console.error("Invalid dimensions. Use: --new 200x100");
     process.exit(1);
   }
-  newWidth = parseInt(match[1]);
-  newHeight = parseInt(match[2]);
+  newWidth = Math.min(parseInt(match[1]), 10000);
+  newHeight = Math.min(parseInt(match[2]), 10000);
 } else {
   const raw = args.find((a) => !a.startsWith("-")) || null;
   const isUrl = raw?.startsWith("http://") || raw?.startsWith("https://");

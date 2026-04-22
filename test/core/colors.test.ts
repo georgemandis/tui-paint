@@ -73,10 +73,14 @@ describe("getHueFamily", () => {
     expect(getHueFamily({ r: 139, g: 69, b: 19 })).toBe("brown");
   });
 
-  it("classifies chocolate as orange (high saturation excludes it from brown)", () => {
-    // chocolate: {210, 105, 30} — hue ~25, saturation ~75%, lightness ~47%
-    // Saturation exceeds 60% brown threshold, so falls through to hue table -> orange
+  it("classifies chocolate as orange (lightness too high for brown)", () => {
+    // chocolate: {210, 105, 30} — hue ~25, lightness ~47%
+    // Lightness exceeds brown's l < 40 threshold, so falls through to hue table -> orange
     expect(getHueFamily({ r: 210, g: 105, b: 30 })).toBe("orange");
+  });
+
+  it("classifies yellow", () => {
+    expect(getHueFamily({ r: 255, g: 255, b: 0 })).toBe("yellow");
   });
 
   it("classifies pink/magenta range", () => {
