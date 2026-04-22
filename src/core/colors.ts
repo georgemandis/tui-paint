@@ -153,6 +153,82 @@ export const CSS_COLORS: Record<string, RGB> = {
 };
 
 /**
+ * Convert an RGB color to HSL.
+ * Returns h in [0, 360), s and l in [0, 100].
+ */
+function rgbToHsl(color: RGB): { h: number; s: number; l: number } {
+  const r = color.r / 255;
+  const g = color.g / 255;
+  const b = color.b / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  const l = (max + min) / 2;
+
+  let s = 0;
+  if (delta !== 0) {
+    s = delta / (1 - Math.abs(2 * l - 1));
+  }
+
+  let h = 0;
+  if (delta !== 0) {
+    if (max === r) {
+      h = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      h = (b - r) / delta + 2;
+    } else {
+      h = (r - g) / delta + 4;
+    }
+    h = h * 60;
+    if (h < 0) h += 360;
+  }
+
+  return { h, s: s * 100, l: l * 100 };
+}
+
+/**
+ * Classify an RGB color into a broad hue family name.
+ *
+ * Priority order:
+ *   1. white  (L > 95%)
+ *   2. black  (L < 8%)
+ *   3. gray   (S < 10%)
+ *   4. brown  (hue 16-65, L < 40%, S 15-60%)
+ *   5. hue angle table
+ */
+export function getHueFamily(color: RGB): string {
+  const { h, s, l } = rgbToHsl(color);
+
+  if (l > 95) return "white";
+  if (l < 8) return "black";
+  if (s < 10) return "gray";
+  if (h >= 16 && h <= 65 && l < 40 && s >= 15) return "brown";
+
+  // Hue angle table
+  // High-lightness red-range hues look pink rather than red
+  if ((h >= 0 && h <= 15) || (h >= 346 && h <= 359)) {
+    return l > 70 ? "pink" : "red";
+  }
+  if (h >= 16 && h <= 45) return "orange";
+  if (h >= 46 && h <= 65) return "yellow";
+  if (h >= 66 && h <= 160) return "green";
+  if (h >= 161 && h <= 195) return "cyan";
+  if (h >= 196 && h <= 260) return "blue";
+  if (h >= 261 && h <= 290) return "purple";
+  // h >= 291 && h <= 345: dark shades are purple, lighter shades are pink
+  return l < 35 ? "purple" : "pink";
+}
+
+/**
+ * Returns true if both colors belong to the same hue family.
+ */
+export function fuzzyColorMatch(pixel: RGB, target: RGB): boolean {
+  return getHueFamily(pixel) === getHueFamily(target);
+}
+
+/**
  * Resolve a color input to an RGB value.
  *
  * Resolution order:
