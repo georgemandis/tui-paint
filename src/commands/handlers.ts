@@ -52,11 +52,12 @@ function executeSubstitution(input: string, store: ReturnType<typeof useStore.ge
   });
 
   const { image, editLayer } = store;
+  const newLayer = editLayer.clone();
   let count = 0;
 
   for (let y = 0; y < image.height; y++) {
     for (let x = 0; x < image.width; x++) {
-      // Read composited view: edit layer pixel if present, else source
+      // Read composited view from original: edit layer pixel if present, else source
       const pixel = editLayer.getPixel(x, y) ?? image.getPixel(x, y);
 
       const isMatch = fuzzy
@@ -64,15 +65,13 @@ function executeSubstitution(input: string, store: ReturnType<typeof useStore.ge
         : pixel.r === fromColor.r && pixel.g === fromColor.g && pixel.b === fromColor.b;
 
       if (isMatch) {
-        editLayer.paintRegion(x, y, 1, 1, toColor);
+        newLayer.paintRegion(x, y, 1, 1, toColor);
         count++;
       }
     }
   }
 
-  // Clone the mutated edit layer so zustand detects the change and triggers re-render
-  const cloned = editLayer.clone();
-  store.setEditLayer(cloned);
+  store.setEditLayer(newLayer);
   store.setMessage(count > 0 ? `Replaced ${count.toLocaleString()} pixels` : "No matching pixels found");
 }
 
