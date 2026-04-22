@@ -64,6 +64,26 @@ const HELP_LINES = `
   :color N               Select palette color by number (1-16)
   Eyedropper (c) picks from canvas; recent picks shown in bar.
 
+  NAMED COLORS
+  ────────────
+  Commands that accept a color number also accept CSS color names:
+  :color red             Set foreground to red
+  :set fg navy           Set foreground to navy
+  :set bg tomato         Set background to tomato
+
+  Common names: red, blue, green, yellow, orange, purple, pink, cyan,
+  white, black, gray, navy, teal, maroon, olive, lime, aqua, gold,
+  silver, coral, salmon, tomato, violet, indigo, turquoise, crimson,
+  khaki, peru, sienna, tan — and all 148 CSS color names.
+
+  COLOR SUBSTITUTION (VIM-STYLE)
+  ──────────────────────────────
+  :%s/blue/red/g         Replace all blue pixels with red (exact match)
+  :%s/~blue/red/g        Replace all blue-family pixels with red (fuzzy)
+
+  Fuzzy (~) matches by hue family: red, orange, yellow, green, cyan,
+  blue, purple, pink, brown, gray, white, black.
+
   COMMANDS
   ────────
   :o <file-or-url>       Open image file or URL
