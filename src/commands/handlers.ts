@@ -307,6 +307,18 @@ export async function executeCommand(input: string) {
       break;
     }
 
+    case "center": {
+      const grid = store.cropRegion;
+      if (grid) {
+        useStore.setState({
+          cursorCol: Math.floor(grid.gridW / 2),
+          cursorRow: Math.floor(grid.gridH / 2),
+        });
+        store.setMessage("Centered");
+      }
+      break;
+    }
+
     case "help":
       useStore.setState({ mode: "help", helpScroll: 0 });
       break;

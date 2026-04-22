@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useStore } from "../state/store.js";
 import type { RGB } from "../core/image-buffer.js";
 import type { ImageBuffer } from "../core/image-buffer.js";
@@ -7,6 +7,21 @@ import { applyFilters } from "../export/filters.js";
 
 // Terminal cells are roughly 2:1 (height:width).
 const CELL_ASPECT = 2.0;
+
+// Offset of the canvas area within the terminal (account for toolbar on the left and header)
+const CANVAS_OFFSET_X = 5;
+const CANVAS_OFFSET_Y = 2;
+
+/** Write a single cell directly via ANSI escapes (1-indexed terminal coords) */
+function writeCell(termCol: number, termRow: number, char: string, r: number, g: number, b: number, bgR?: number, bgG?: number, bgB?: number) {
+  let seq = `\x1b[${termRow};${termCol}H`;
+  if (bgR !== undefined) {
+    seq += `\x1b[38;2;${r};${g};${b};48;2;${bgR};${bgG};${bgB}m${char}\x1b[0m`;
+  } else {
+    seq += `\x1b[38;2;${r};${g};${b}m${char}\x1b[0m`;
+  }
+  process.stdout.write(seq);
+}
 
 export function Canvas() {
   const image = useStore((s) => s.image);
@@ -26,6 +41,11 @@ export function Canvas() {
   // Track the crop region so we can map cursor/edits back to source coords
   const cropRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
 
+  // Track previous cursor position for direct ANSI updates
+  const prevCursorRef = useRef({ col: -1, row: -1, brushW: 1, brushH: 1 });
+  // Track whether the pixel grid changed (need full Ink render) vs just cursor moved
+  const lastFilteredRef = useRef<RGB[][] | null>(null);
+
   // Cursor color animation
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 500);
@@ -38,11 +58,6 @@ export function Canvas() {
     const termSize = viewport.getTermSize();
     const zoom = viewport.getZoom();
 
-    // At zoom=1: fit the whole image into the terminal (aspect-correct).
-    // At zoom>1: use the FULL terminal grid, crop a region of the source
-    // that corresponds to what those terminal cells would show.
-    //
-    // Step 1: compute zoom=1 fit (aspect-correct, may not fill terminal)
     const imgAspect = image.width / image.height;
     const gridAspect = termSize.w / (termSize.h * CELL_ASPECT);
 
@@ -55,26 +70,17 @@ export function Canvas() {
       baseCols = Math.round(termSize.h * CELL_ASPECT * imgAspect);
     }
 
-    // Step 2: figure out source-pixels-per-cell at current zoom.
-    // At zoom=1, one cell covers (image.width / baseCols) source px horizontally.
-    // At zoom=N, one cell covers 1/N of that (more detail per cell).
     const baseSrcPerCell = image.width / baseCols;
     const srcPerCell = baseSrcPerCell / zoom;
 
-    // Step 3: the crop is what the terminal can show at this detail level.
-    // Crop width = terminal columns * srcPerCell
-    // Crop height = terminal rows * srcPerCell * CELL_ASPECT (cells are ~2x tall)
-    // But clamp the crop to the actual image dimensions.
     const rawCropW = termSize.w * srcPerCell;
     const rawCropH = termSize.h * srcPerCell * CELL_ASPECT;
     const cropW = Math.min(rawCropW, image.width);
     const cropH = Math.min(rawCropH, image.height);
 
-    // The output grid: how many terminal cells does the crop fill?
     const targetCols = Math.max(1, Math.round(cropW / srcPerCell));
     const targetRows = Math.max(1, Math.round(cropH / (srcPerCell * CELL_ASPECT)));
 
-    // Map cursor from grid coords to source coords via previous crop
     const prevCrop = cropRef.current;
     const prevW = prevCrop.w || image.width;
     const prevH = prevCrop.h || image.height;
@@ -84,37 +90,21 @@ export function Canvas() {
     const cursorSrcX = prevX + (cursorCol / (resized?.width || targetCols)) * prevW;
     const cursorSrcY = prevY + (cursorRow / (resized?.height || targetRows)) * prevH;
 
-    // Edge-scroll: only move the crop when the cursor is at a grid edge
-    // and there's more image to reveal in that direction.
     let cropX = prevX;
     let cropY = prevY;
 
-    // If crop size changed (zoom/resize), re-center once
     if (Math.abs(cropW - prevW) > 1 || Math.abs(cropH - prevH) > 1) {
       cropX = cursorSrcX - cropW / 2;
       cropY = cursorSrcY - cropH / 2;
     } else {
       const cellW = cropW / targetCols;
       const cellH = cropH / targetRows;
-      // Scroll right: cursor at right edge, more image to the right
-      if (cursorCol >= targetCols - 1 && cropX + cropW < image.width) {
-        cropX += cellW;
-      }
-      // Scroll left: cursor at left edge, more image to the left
-      if (cursorCol <= 0 && cropX > 0) {
-        cropX -= cellW;
-      }
-      // Scroll down: cursor at bottom edge, more image below
-      if (cursorRow >= targetRows - 1 && cropY + cropH < image.height) {
-        cropY += cellH;
-      }
-      // Scroll up: cursor at top edge, more image above
-      if (cursorRow <= 0 && cropY > 0) {
-        cropY -= cellH;
-      }
+      if (cursorCol >= targetCols - 1 && cropX + cropW < image.width) cropX += cellW;
+      if (cursorCol <= 0 && cropX > 0) cropX -= cellW;
+      if (cursorRow >= targetRows - 1 && cropY + cropH < image.height) cropY += cellH;
+      if (cursorRow <= 0 && cropY > 0) cropY -= cellH;
     }
 
-    // Clamp so we don't go outside the image
     cropX = Math.max(0, Math.min(cropX, image.width - cropW));
     cropY = Math.max(0, Math.min(cropY, image.height - cropH));
 
@@ -151,16 +141,52 @@ export function Canvas() {
     return applyFilters(grid, { grayscale: gsFilter, palette: paletteFilter, dither: ditherFilter });
   }, [resized, editLayer, gsFilter, paletteFilter, ditherFilter]);
 
+  // Direct ANSI cursor update — runs on every cursor/tick change WITHOUT re-rendering React
+  useEffect(() => {
+    if (!filtered) return;
+    const prev = prevCursorRef.current;
+    const oldHalfW = Math.floor(prev.brushW / 2);
+    const oldHalfH = Math.floor(prev.brushH / 2);
+    const halfW = Math.floor(brushW / 2);
+    const halfH = Math.floor(brushH / 2);
+
+    // Restore old cursor cells to their pixel colors
+    if (prev.col >= 0) {
+      for (let dr = -oldHalfH; dr < prev.brushH - oldHalfH; dr++) {
+        for (let dc = -oldHalfW; dc < prev.brushW - oldHalfW; dc++) {
+          const r = prev.row + dr;
+          const c = prev.col + dc;
+          if (r >= 0 && r < filtered.length && c >= 0 && c < filtered[0].length) {
+            const px = filtered[r][c];
+            writeCell(CANVAS_OFFSET_X + c + 1, CANVAS_OFFSET_Y + r + 1, "█", px.r, px.g, px.b);
+          }
+        }
+      }
+    }
+
+    // Draw new cursor
+    const hue = (Date.now() / 4) % 360;
+    const cursorRgb = hslToRgb(hue, 100, 60);
+    for (let dr = -halfH; dr < brushH - halfH; dr++) {
+      for (let dc = -halfW; dc < brushW - halfW; dc++) {
+        const r = cursorRow + dr;
+        const c = cursorCol + dc;
+        if (r >= 0 && r < filtered.length && c >= 0 && c < filtered[0].length) {
+          const px = filtered[r][c];
+          writeCell(CANVAS_OFFSET_X + c + 1, CANVAS_OFFSET_Y + r + 1, "▒", cursorRgb[0], cursorRgb[1], cursorRgb[2], px.r, px.g, px.b);
+        }
+      }
+    }
+
+    prevCursorRef.current = { col: cursorCol, row: cursorRow, brushW, brushH };
+  }, [cursorCol, cursorRow, brushW, brushH, tick, filtered]);
+
   if (!filtered) {
     return <Box flexGrow={1} width={termSize.w} height={termSize.h} />;
   }
 
-  // Build rows of colored block characters
-  const halfW = Math.floor(brushW / 2);
-  const halfH = Math.floor(brushH / 2);
-  const hue = (Date.now() / 4) % 360;
-  const cursorRgb = hslToRgb(hue, 100, 60);
-
+  // Full Ink render: only pixel data, NO cursor overlay.
+  // The cursor is drawn via direct ANSI in the useEffect above.
   const rows: React.ReactNode[] = [];
   for (let row = 0; row < filtered.length; row++) {
     const cells: React.ReactNode[] = [];
@@ -169,16 +195,12 @@ export function Canvas() {
 
     for (let col = 0; col <= filtered[0].length; col++) {
       let pixel: RGB | undefined;
-      let isCursor = false;
 
       if (col < filtered[0].length) {
         pixel = filtered[row][col];
-
-        isCursor = col >= cursorCol - halfW && col < cursorCol - halfW + brushW
-          && row >= cursorRow - halfH && row < cursorRow - halfH + brushH;
       }
 
-      const sameRun = col < filtered[0].length && !isCursor && runColor
+      const sameRun = col < filtered[0].length && runColor
         && pixel!.r === runColor.r && pixel!.g === runColor.g && pixel!.b === runColor.b;
 
       if (!sameRun && runColor !== null) {
@@ -192,21 +214,9 @@ export function Canvas() {
 
       if (col >= filtered[0].length) break;
 
-      if (isCursor) {
-        cells.push(
-          <Text
-            key={`${row}-${col}-cur`}
-            color={`rgb(${cursorRgb[0]},${cursorRgb[1]},${cursorRgb[2]})`}
-            backgroundColor={`rgb(${pixel!.r},${pixel!.g},${pixel!.b})`}
-          >
-            ▒
-          </Text>
-        );
-      } else {
-        if (runColor === null) {
-          runStart = col;
-          runColor = pixel!;
-        }
+      if (runColor === null) {
+        runStart = col;
+        runColor = pixel!;
       }
     }
 
