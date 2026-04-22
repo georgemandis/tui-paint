@@ -14,7 +14,7 @@ import { EditLayer } from "./core/edit-layer.js";
 import { Viewport } from "./core/viewport.js";
 import { undoStack } from "./state/undo.js";
 
-export function App({ source }: { source: string | null }) {
+export function App({ source, width, height }: { source: string | null; width?: number; height?: number }) {
   const { stdout } = useStdout();
   const mode = useStore((s) => s.mode);
   const loading = useStore((s) => s.loading);
@@ -37,9 +37,9 @@ export function App({ source }: { source: string | null }) {
           name = isUrl ? source.split("/").pop() || "url" : source;
         } else {
           // Default blank canvas — 1:1 with terminal grid
-          const defCols = (stdout?.columns || 80) - 6;
-          const defRows = (stdout?.rows || 24) - 5;
-          image = await ImageBuffer.blankAsync(defCols, defRows * 2, { r: 255, g: 255, b: 255 });
+          const defCols = width || (stdout?.columns || 80) - 6;
+          const defRows = height || ((stdout?.rows || 24) - 5) * 2;
+          image = await ImageBuffer.blankAsync(defCols, defRows, { r: 255, g: 255, b: 255 });
           name = null;
         }
 
@@ -57,7 +57,7 @@ export function App({ source }: { source: string | null }) {
       }
       store.setLoading(false);
     })();
-  }, [source]);
+  }, [source, width, height]);
 
   if (mode === "help") {
     return (
