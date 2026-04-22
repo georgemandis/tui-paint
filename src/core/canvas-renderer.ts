@@ -17,12 +17,14 @@ export class CanvasRenderer {
   private lastCursorCol: number = -1;
   private lastCursorRow: number = -1;
 
-  private lastBrushSize: number = 1;
+  private lastBrushW: number = 1;
+  private lastBrushH: number = 1;
 
   /** Render a full grid, only writing cells that changed from last frame */
-  render(grid: RGB[][], cursorCol?: number, cursorRow?: number, cursorVisible: boolean = true, brushSize: number = 1) {
+  render(grid: RGB[][], cursorCol?: number, cursorRow?: number, cursorVisible: boolean = true, brushW: number = 1, brushH: number = 1) {
     let output = "";
-    const half = Math.floor(brushSize / 2);
+    const halfW = Math.floor(brushW / 2);
+    const halfH = Math.floor(brushH / 2);
 
     for (let row = 0; row < Math.min(grid.length, this.height); row++) {
       for (let col = 0; col < Math.min(grid[row].length, this.width); col++) {
@@ -30,12 +32,12 @@ export class CanvasRenderer {
         const prev = this.lastFrame?.[row]?.[col];
 
         const inCursor = cursorCol !== undefined && cursorRow !== undefined
-          && col >= cursorCol - half && col < cursorCol - half + brushSize
-          && row >= cursorRow - half && row < cursorRow - half + brushSize;
-        const inLastCursor = col >= this.lastCursorCol - Math.floor(this.lastBrushSize / 2)
-          && col < this.lastCursorCol - Math.floor(this.lastBrushSize / 2) + this.lastBrushSize
-          && row >= this.lastCursorRow - Math.floor(this.lastBrushSize / 2)
-          && row < this.lastCursorRow - Math.floor(this.lastBrushSize / 2) + this.lastBrushSize;
+          && col >= cursorCol - halfW && col < cursorCol - halfW + brushW
+          && row >= cursorRow - halfH && row < cursorRow - halfH + brushH;
+        const inLastCursor = col >= this.lastCursorCol - Math.floor(this.lastBrushW / 2)
+          && col < this.lastCursorCol - Math.floor(this.lastBrushW / 2) + this.lastBrushW
+          && row >= this.lastCursorRow - Math.floor(this.lastBrushH / 2)
+          && row < this.lastCursorRow - Math.floor(this.lastBrushH / 2) + this.lastBrushH;
         const changed = !prev || prev.r !== pixel.r || prev.g !== pixel.g || prev.b !== pixel.b || inCursor || inLastCursor;
 
         if (changed) {
@@ -55,7 +57,8 @@ export class CanvasRenderer {
 
     this.lastCursorCol = cursorCol ?? -1;
     this.lastCursorRow = cursorRow ?? -1;
-    this.lastBrushSize = brushSize;
+    this.lastBrushW = brushW;
+    this.lastBrushH = brushH;
 
     if (output) {
       process.stdout.write(output);

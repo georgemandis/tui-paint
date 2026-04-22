@@ -14,7 +14,8 @@ export function Canvas() {
   const viewport = useStore((s) => s.viewport);
   const cursorCol = useStore((s) => s.cursorCol);
   const cursorRow = useStore((s) => s.cursorRow);
-  const brushSize = useStore((s) => s.brushSize);
+  const brushW = useStore((s) => s.brushW);
+  const brushH = useStore((s) => s.brushH);
   const gsFilter = useStore((s) => s.grayscale);
   const paletteFilter = useStore((s) => s.palette);
   const ditherFilter = useStore((s) => s.dither);
@@ -83,9 +84,23 @@ export function Canvas() {
     const cursorSrcX = prevX + (cursorCol / (resized?.width || targetCols)) * prevW;
     const cursorSrcY = prevY + (cursorRow / (resized?.height || targetRows)) * prevH;
 
-    // Center the crop on the cursor
-    let cropX = cursorSrcX - cropW / 2;
-    let cropY = cursorSrcY - cropH / 2;
+    // Edge-scroll: only move the crop when the cursor pushes past an edge.
+    // Reuse previous crop position and nudge it just enough to keep cursor visible.
+    let cropX = prevX;
+    let cropY = prevY;
+
+    // If crop size changed (zoom/resize), re-center once
+    if (Math.abs(cropW - prevW) > 1 || Math.abs(cropH - prevH) > 1) {
+      cropX = cursorSrcX - cropW / 2;
+      cropY = cursorSrcY - cropH / 2;
+    } else {
+      // Nudge horizontally if cursor is outside crop
+      if (cursorSrcX < cropX) cropX = cursorSrcX;
+      else if (cursorSrcX >= cropX + cropW) cropX = cursorSrcX - cropW + srcPerCell;
+      // Nudge vertically
+      if (cursorSrcY < cropY) cropY = cursorSrcY;
+      else if (cursorSrcY >= cropY + cropH) cropY = cursorSrcY - cropH + srcPerCell * CELL_ASPECT;
+    }
 
     // Clamp so we don't go outside the image
     cropX = Math.max(0, Math.min(cropX, image.width - cropW));
@@ -129,7 +144,8 @@ export function Canvas() {
   }
 
   // Build rows of colored block characters
-  const half = Math.floor(brushSize / 2);
+  const halfW = Math.floor(brushW / 2);
+  const halfH = Math.floor(brushH / 2);
   const hue = (Date.now() / 4) % 360;
   const cursorRgb = hslToRgb(hue, 100, 60);
 
@@ -146,8 +162,8 @@ export function Canvas() {
       if (col < filtered[0].length) {
         pixel = filtered[row][col];
 
-        isCursor = col >= cursorCol - half && col < cursorCol - half + brushSize
-          && row >= cursorRow - half && row < cursorRow - half + brushSize;
+        isCursor = col >= cursorCol - halfW && col < cursorCol - halfW + brushW
+          && row >= cursorRow - halfH && row < cursorRow - halfH + brushH;
       }
 
       const sameRun = col < filtered[0].length && !isCursor && runColor
