@@ -1,7 +1,7 @@
 import { resolve } from "path";
 import { parseCommand } from "./parser.js";
 import { useStore, MS_PAINT_PALETTE } from "../state/store.js";
-import { resolveColor } from "../core/colors.js";
+import { resolveColor, fuzzyColorMatch } from "../core/colors.js";
 import { ImageBuffer } from "../core/image-buffer.js";
 import { EditLayer } from "../core/edit-layer.js";
 import { Viewport } from "../core/viewport.js";
@@ -14,7 +14,76 @@ export function resolvePath(p: string): string {
 
 export { parseCommand };
 
+function executeSubstitution(input: string, store: ReturnType<typeof useStore.getState>) {
+  // Parse: %s/from/to/g
+  const match = input.match(/^%s\/(.+?)\/(.+?)\/g$/);
+  if (!match) {
+    store.setMessage("Usage: :%s/color/color/g (add ~ prefix for fuzzy: :%s/~blue/red/g)");
+    return;
+  }
+
+  const [, fromStr, toStr] = match;
+  const fuzzy = fromStr.startsWith("~");
+  const fromName = fuzzy ? fromStr.slice(1) : fromStr;
+
+  const fromColor = resolveColor(fromName);
+  const toColor = resolveColor(toStr);
+
+  if (!fromColor) {
+    store.setMessage(`Unknown color: ${fromName} (use a CSS name or palette number 1-16)`);
+    return;
+  }
+  if (!toColor) {
+    store.setMessage(`Unknown color: ${toStr} (use a CSS name or palette number 1-16)`);
+    return;
+  }
+
+  if (!store.image || !store.editLayer) {
+    store.setMessage("No image loaded");
+    return;
+  }
+
+  // Push undo snapshot (undoStack.push clones the edit layer internally)
+  undoStack.push({
+    editLayer: store.editLayer,
+    grayscale: store.grayscale,
+    palette: store.palette,
+    dither: store.dither,
+  });
+
+  const { image, editLayer } = store;
+  let count = 0;
+
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      // Read composited view: edit layer pixel if present, else source
+      const pixel = editLayer.getPixel(x, y) ?? image.getPixel(x, y);
+
+      const isMatch = fuzzy
+        ? fuzzyColorMatch(pixel, fromColor)
+        : pixel.r === fromColor.r && pixel.g === fromColor.g && pixel.b === fromColor.b;
+
+      if (isMatch) {
+        editLayer.paintRegion(x, y, 1, 1, toColor);
+        count++;
+      }
+    }
+  }
+
+  // Clone the mutated edit layer so zustand detects the change and triggers re-render
+  const cloned = editLayer.clone();
+  store.setEditLayer(cloned);
+  store.setMessage(count > 0 ? `Replaced ${count.toLocaleString()} pixels` : "No matching pixels found");
+}
+
 export async function executeCommand(input: string) {
+  // Handle :%s/from/to/g substitution syntax
+  const trimmed = input.trim();
+  if (trimmed.startsWith("%s/")) {
+    executeSubstitution(trimmed, useStore.getState());
+    return;
+  }
+
   const { command, args } = parseCommand(input);
   const store = useStore.getState();
 
